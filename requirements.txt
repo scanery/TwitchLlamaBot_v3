@@ -1,0 +1,9 @@
+python-dotenv
+requests
+rich
+numpy
+av
+streamlink
+faster-whisper
+ddgs>=9.16.0
+pillow

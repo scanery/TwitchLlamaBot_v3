@@ -1,0 +1,20 @@
+# Ambiente Virtual
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Configurações sensíveis (SEGREDO)
+.env
+.env.bak1
+
+# Bancos de dados locais e logs de sessões passadas
+*.db
+*.db-shm
+*.db-wal
+logs/
+downloads/
+
+# Sistema operacional
+Thumbs.db
+.DS_Store
