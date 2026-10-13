@@ -12,6 +12,12 @@ class WebSearch:
         self.enabled = os.getenv("WEB_SEARCH_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
         self.max_results = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
         self.region = os.getenv("WEB_SEARCH_REGION", "br-pt")
+        if not self.enabled:
+            print("[WEB] Pesquisa desativada por WEB_SEARCH_ENABLED.")
+        elif DDGS is None:
+            print("[WEB ERRO] Pacote ddgs não instalado; execute pip install -r requirements.txt.")
+        else:
+            print(f"[WEB] Pesquisa habilitada (até {self.max_results} resultados por consulta).")
 
     def search(self, query):
         query = str(query or "").strip()
@@ -19,13 +25,22 @@ class WebSearch:
             return []
 
         try:
-            results = DDGS().text(
-                query,
-                region=self.region,
-                safesearch="moderate",
-                max_results=self.max_results,
-                backend="auto",
-            )
+            try:
+                results = DDGS().text(
+                    query,
+                    region=self.region,
+                    safesearch="moderate",
+                    max_results=self.max_results,
+                    backend="auto",
+                )
+            except TypeError:
+                # Compatibilidade com versões do pacote que ainda não aceitam backend.
+                results = DDGS().text(
+                    query,
+                    region=self.region,
+                    safesearch="moderate",
+                    max_results=self.max_results,
+                )
         except Exception as exc:
             print(f"[WEB ERRO] {type(exc).__name__}: {exc}")
             return []

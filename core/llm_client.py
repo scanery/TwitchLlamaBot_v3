@@ -25,6 +25,8 @@ PROVEDORES = {
 # (assim um .env antigo continua funcionando sem você editar nada)
 SUBSTITUTOS_GROQ = {
     "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+    # O modelo de visão qwen3.6 foi descontinuado em 14/09/2026.
+    "qwen/qwen3.6-27b": "qwen/qwen3.8-27b",
     "llama-3.1-8b-instant": "openai/gpt-oss-20b",
     "qwen/qwen3-32b": "openai/gpt-oss-120b",
     "meta-llama/llama-4-scout-17b-16e-instruct": "qwen/qwen3.6-27b",

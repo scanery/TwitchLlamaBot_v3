@@ -240,6 +240,25 @@ Responda SOMENTE JSON:
             "consulta": str(dados.get("consulta") or "").strip()[:120],
         }
         resultado["observacao"] = resultado["entendi"]
+
+        # A pesquisa era apenas sugerida pelo prompt, mas nunca executada.
+        # Quando o modelo pede uma consulta, buscamos e fazemos uma segunda
+        # reflexão enriquecida com fontes. O parâmetro pesquisa impede loops.
+        if resultado["pesquisar"] and not pesquisa:
+            consulta = resultado["consulta"]
+            print(f"[WEB] Pesquisando: {consulta}")
+            resultados_web = self.web.search(consulta)
+            if resultados_web:
+                print(f"[WEB] {len(resultados_web)} resultado(s) encontrados:")
+                for indice, item in enumerate(resultados_web, 1):
+                    print(f"[WEB] {indice}. {item['title']} — {item['url']}")
+                return self.refletir(
+                    eventos, contexto_memoria, canal=canal, estilo=estilo,
+                    emotes=emotes, recentes_bot=recentes_bot, mencao=mencao,
+                    pesquisa=resultados_web, lol=lol,
+                )
+            print("[WEB] Nenhum resultado retornado; seguindo sem pesquisa.")
+            resultado["observacao"] = (resultado["observacao"] + " | Pesquisa sem resultados").strip(" |")
         return resultado
 
     # ------------------------------------------------------------------
@@ -293,10 +312,15 @@ Responda SOMENTE JSON:
                 t = t[0].lower() + t[1:]
         return t
 
-    def escolher_candidato(self, candidatos, recentes_bot=None, amostra_chat=None):
-        """Escolhe o melhor candidato aceitável. Devolve (candidato|None, notas)."""
+    def escolher_candidato(self, candidatos, recentes_bot=None, amostra_chat=None, eventos_recentes=None):
+        """Escolhe o melhor candidato aceitável e evita eco literal do chat/áudio."""
         notas = []
         melhor = None
+        fontes = []
+        for evento in eventos_recentes or []:
+            texto_fonte = str(evento.get("text") or evento.get("texto") or "").strip()
+            if texto_fonte and evento.get("event_type", evento.get("tipo")) in {"chat", "audio"}:
+                fontes.append(texto_fonte)
         for c in candidatos or []:
             texto = self.humanizar(c["texto"], amostra_chat)
             if len(texto.split()) < 2 and not re.search(r"[A-Z]{3,}|\d", texto):
@@ -306,7 +330,23 @@ Responda SOMENTE JSON:
                 notas.append(f"descartado (cara de bot/narrador): {texto!r}")
                 continue
             if self._repetido(texto, recentes_bot):
-                notas.append(f"descartado (repete algo recente): {texto!r}")
+                notas.append(f"descartado (repete algo recente do bot): {texto!r}")
+                continue
+            normal = lambda value: " ".join(_norm(value).split())
+            candidato_norm = normal(texto)
+            tokens_candidato = set(candidato_norm.split())
+            eco = False
+            if len(tokens_candidato) >= 5:
+                for fonte in fontes:
+                    fonte_norm = normal(fonte)
+                    tokens_fonte = set(fonte_norm.split())
+                    if candidato_norm and (candidato_norm in fonte_norm or
+                        (len(tokens_fonte) >= 5 and
+                         len(tokens_candidato & tokens_fonte) / max(1, len(tokens_candidato | tokens_fonte)) >= 0.82)):
+                        eco = True
+                        break
+            if eco:
+                notas.append(f"descartado (eco literal de chat/áudio): {texto!r}")
                 continue
             item = dict(c)
             item["texto"] = texto

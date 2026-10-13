@@ -169,10 +169,10 @@ class AudioListener:
             return
 
         tempo = time.time() - inicio
-        if self._mostrar_status:
-            print(f"[OUVIDOS] {texto}")
-            if self._debug:
-                print(f"[AUDIO DEBUG] chunk={self._chunks_processados} tempo={tempo:.2f}s rms={rms:.4f} peak={peak:.4f}")
+        # A transcrição é exibida uma única vez pelo callback da aplicação.
+        # Mantemos apenas telemetria técnica quando o debug está ligado.
+        if self._mostrar_status and self._debug:
+            print(f"[AUDIO DEBUG] chunk={self._chunks_processados} tempo={tempo:.2f}s rms={rms:.4f} peak={peak:.4f}")
 
         if self.on_transcription and not self._pausado.is_set():
             try:

@@ -7,3 +7,4 @@ streamlink
 faster-whisper
 ddgs>=9.16.0
 pillow
+prompt-toolkit>=3.0.0

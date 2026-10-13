@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
 
 from core.ai_engine import AIEngine
 from core.audio_listener import AudioListener
@@ -23,7 +25,7 @@ load_dotenv()
 from core.logger import iniciar_log  # noqa: E402
 iniciar_log()
 
-console = Console()
+console = Console(force_terminal=False, color_system=None)
 
 def _bool(nome, padrao="false"):
     return os.getenv(nome, padrao).strip().lower() in {"1", "true", "yes", "on"}
@@ -104,7 +106,7 @@ def on_audio(texto):
 
 def on_visao(texto):
     if not stop_event.is_set():
-        console.print(f"[bold cyan][VISÃO (TELA)]:[/bold cyan] {texto}")
+        # StreamVision já imprime a descrição uma vez; aqui só persistimos o evento.
         registrar_evento("visao", texto)
 
 def _termos_mencao():
@@ -248,7 +250,9 @@ def processar_reflexao():
 
         memory.mark_processed([e["id"] for e in eventos])
 
-        cand, notas = ai.escolher_candidato(resultado["candidatos"], recentes_bot, estilo)
+        cand, notas = ai.escolher_candidato(
+            resultado["candidatos"], recentes_bot, estilo, eventos_recentes=eventos
+        )
         limiar = limiar_atual(bool(mencao))
         tempo = time.perf_counter() - inicio
         
@@ -286,9 +290,13 @@ def comandos():
         "/limiar N|auto - Altera limiar de fala\n"
         "/ajuda - Mostra esta lista"
     )
+    sessao = PromptSession()
     while not stop_event.is_set():
         try:
-            linha = input().strip()
+            # patch_stdout redesenha "bot> " mesmo quando outras threads
+            # imprimem logs; as mensagens continuam visíveis normalmente.
+            with patch_stdout():
+                linha = sessao.prompt("bot> ").strip()
         except (EOFError, KeyboardInterrupt):
             return
         if not linha.startswith("/"):
@@ -307,6 +315,20 @@ def comandos():
         elif cmd == "/forcar":
             forcar_reflexao.set()
             console.print("[CMD] Reflexão forçada agendada.")
+        elif cmd == "/memoria":
+            st = memory.stats()
+            console.print(
+                f"[bold cyan][MEMÓRIA][/bold cyan] eventos={st['eventos']} | pendentes={st['pendentes']} | "
+                f"pessoas={st['pessoas']} | fatos={st['memorias']} | episódios={st['episodios']}"
+            )
+            fatos = memory.top_memories(8)
+            if fatos:
+                for fato in fatos:
+                    console.print(f"  • [{fato['memory_type']}] {fato['subject']}: {fato['content']}")
+            else:
+                console.print("[MEMÓRIA] Ainda não há fatos consolidados.")
+        elif cmd == "/lol":
+            console.print(lol.diagnostico())
         elif cmd == "/limiar":
             if arg == "auto":
                 limiar_manual = None
@@ -330,6 +352,7 @@ def main():
     global audio, vision, last_status_print, mencao_pendente
 
     console.print(Panel("TwitchLlamaBot v3 - Rodando com Telemetria Completa", title="Soraka Que Não Cura", border_style="cyan"))
+    console.print("[dim]Comandos locais: /ajuda | /status | /memoria | /lol | /forcar | /envio on|off | /limiar N|auto[/dim]")
     
     if not ai.llm.ativo:
         console.print("[red]Nenhum modelo configurado no .env.[/red]")
@@ -345,6 +368,8 @@ def main():
 
     vision = StreamVision(CANAL, LLMClientVisao(), on_visao, info_canal=info_canal)
     vision.start()
+    if not vision.ativo:
+        console.print("[yellow][VISÃO] Inativa: confira VISION_ENABLED, Pillow e VISION_CHAIN no .env.[/yellow]")
 
     threading.Thread(target=scheduler_reflexao, name="Scheduler", daemon=True).start()
     threading.Thread(target=comandos, name="Comandos", daemon=True).start()
